@@ -26,10 +26,20 @@ Este projeto permite adicionar produtos, trocar de mercado, gerenciar histórico
 ## Configuração do Supabase
 
 1. Crie um projeto no Supabase.
-2. Crie as tabelas mínimo necessárias:
-   - `items` com colunas: `id`, `name`, `category`, `price`
-   - `markets` com colunas: `id`, `name`
-   - `price_history` com colunas: `id`, `item_name`, `market`, `price`
+2. As tabelas necessárias já estão fornecidas em `db/init.sql` — você pode executar esse arquivo no SQL Editor do Supabase ou via `psql` para criar o esquema padrão.
+
+   - `db/init.sql` contém as definições para `items`, `markets` e `price_history`.
+
+   - Para aplicar no Supabase (SQL Editor):
+     - Abra o seu projeto → Database → SQL Editor → New Query
+     - Cole o conteúdo de `db/init.sql` e clique em **Run**
+
+   - Para aplicar via terminal com `psql` (substitua a connection string):
+
+```bash
+psql "postgresql://<user>:<password>@<host>:<port>/<database>" -f db/init.sql
+```
+
 3. Configure as variáveis de ambiente em `.env` ou `.env.local`:
 
 ```env
