@@ -1,15 +1,15 @@
 # Lista de Compras
 
-Aplicativo de lista de compras inteligente criado com React e Tailwind CSS.
+Aplicativo de lista de compras inteligente criado com React, Tailwind CSS e Supabase.
 
 ## Visão geral
 
-Este projeto é uma lista de compras que permite gerenciar produtos, mercados e histórico de preços com persistência local no navegador.
+Este projeto permite adicionar produtos, trocar de mercado, gerenciar histórico de preços e persistir todos os dados em um banco de dados Supabase.
 
 ## Funcionalidades
 
 - Adicionar produtos com categoria e preço
-- Persistência de itens e histórico de preços no `localStorage`
+- Persistência de itens e histórico de preços no Supabase
 - Escolher mercado e atualizar preços por mercado
 - Editar ou remover itens da lista
 - Exportar o relatório usando impressão do navegador
@@ -20,11 +20,26 @@ Este projeto é uma lista de compras que permite gerenciar produtos, mercados e 
 - React 19
 - Create React App
 - Tailwind CSS
-- lucide-react (biblioteca de ícones)
+- lucide-react (ícones)
+- Supabase
+
+## Configuração do Supabase
+
+1. Crie um projeto no Supabase.
+2. Crie as tabelas mínimo necessárias:
+   - `items` com colunas: `id`, `name`, `category`, `price`
+   - `markets` com colunas: `id`, `name`
+   - `price_history` com colunas: `id`, `item_name`, `market`, `price`
+3. Configure as variáveis de ambiente em `.env` ou `.env.local`:
+
+```env
+REACT_APP_SUPABASE_URL=https://your-project-ref.supabase.co
+REACT_APP_SUPABASE_ANON_KEY=your-anon-public-key
+```
+
+4. Execute o projeto com `npm start`.
 
 ## Scripts disponíveis
-
-No diretório do projeto, execute:
 
 ### `npm start`
 
@@ -45,7 +60,7 @@ O Tailwind está configurado em:
 
 - `tailwind.config.js`
 - `postcss.config.js`
-- `src/index.css` com `@tailwind base`, `@tailwind components` e `@tailwind utilities`
+- `src/index.css`
 
 ## Personalização do app
 
@@ -59,4 +74,4 @@ Após gerar o build, sirva a pasta `build/` com um servidor estático ou publiqu
 
 ## Observações
 
-O projeto está pronto para receber novas funcionalidades de categorias, filtros, e integração com APIs de mercado.
+O projeto está pronto para continuar a customização de categorias, filtros, relatórios e integração com APIs de mercado.
