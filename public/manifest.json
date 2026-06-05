@@ -1,6 +1,7 @@
 {
-  "short_name": "Lista de Compras",
+  "short_name": "Compras",
   "name": "Lista de Compras",
+  "description": "Gerencie suas listas de compras com histórico de preços inteligente",
   "icons": [
     {
       "src": "favicon.ico",
@@ -10,16 +11,22 @@
     {
       "src": "logo192.png",
       "type": "image/png",
-      "sizes": "192x192"
+      "sizes": "192x192",
+      "purpose": "any maskable"
     },
     {
       "src": "logo512.png",
       "type": "image/png",
-      "sizes": "512x512"
+      "sizes": "512x512",
+      "purpose": "any maskable"
     }
   ],
-  "start_url": ".",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "theme_color": "#000000",
-  "background_color": "#ffffff"
+  "orientation": "portrait",
+  "theme_color": "#2563eb",
+  "background_color": "#f9fafb",
+  "lang": "pt-BR",
+  "categories": ["lifestyle", "utilities"]
 }
