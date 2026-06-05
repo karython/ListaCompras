@@ -42,7 +42,6 @@ export default function ShoppingList({ session }) {
   const [showShareModal, setShowShareModal] = useState(false);
   const [shareLink, setShareLink] = useState('');
   const [linkCopied, setLinkCopied] = useState(false);
-  const [sharingListId, setSharingListId] = useState(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -249,7 +248,6 @@ export default function ShoppingList({ session }) {
 
   // Share feature
   const openShareModal = async (listId) => {
-    setSharingListId(listId);
     let { data } = await supabase
       .from('list_shares').select('share_token').eq('list_id', listId).maybeSingle();
     if (!data) {
