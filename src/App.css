@@ -1,30 +1,4 @@
-/* Ajustes globais e tipografia */
-body {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  background-color: #f9fafb;
-}
-
-/* Otimização para impressão (Exportar PDF) */
-@media print {
-  body {
-    background-color: white;
-  }
-  
-  .print\:hidden {
-    display: none !important;
-  }
-
-  .print\:bg-white {
-    background-color: white !important;
-  }
-
-  input {
-    border: none !important;
-    background: transparent !important;
-  }
-}
-
-/* Estilos personalizados para os inputs */
+/* Remove spin buttons from number inputs */
 input::-webkit-outer-spin-button,
 input::-webkit-inner-spin-button {
   -webkit-appearance: none;
@@ -33,20 +7,4 @@ input::-webkit-inner-spin-button {
 
 input[type=number] {
   -moz-appearance: textfield;
-}
-
-/* Transições suaves */
-button {
-  transition: all 0.2s ease-in-out;
-}
-
-button:hover {
-  transform: translateY(-1px);
-}
-
-/* Ajuste fino para mobile */
-@media (max-width: 640px) {
-  .max-w-2xl {
-    padding: 1rem;
-  }
 }
