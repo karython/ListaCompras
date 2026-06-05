@@ -24,5 +24,16 @@
   "theme_color": "#2563eb",
   "background_color": "#f9fafb",
   "lang": "pt-BR",
-  "categories": ["lifestyle", "utilities"]
+  "categories": ["lifestyle", "utilities"],
+  "prefer_related_applications": false,
+  "iarc_rating_id": "e84b072d-71b3-4d3e-86ae-31a8ce4e53b7",
+  "screenshots": [
+    {
+      "src": "logo512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Lista de Compras"
+    }
+  ]
 }
