@@ -57,7 +57,7 @@ export default function ShoppingMode({ session }) {
       const { data } = await supabase
         .from('shopping_lists')
         .select('id, name, user_id, market_id, status, created_at, markets(id, name)')
-        .in('id', memberListIds).eq('status', 'saved')
+        .in('id', memberListIds).in('status', ['open', 'saved'])
         .order('created_at', { ascending: false });
       sharedLists = (data || []).map(l => ({ ...l, isShared: true }));
     }
@@ -471,11 +471,16 @@ export default function ShoppingMode({ session }) {
                     <div className="p-4">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <p className="font-semibold text-gray-800">{list.name}</p>
                             {list.isShared && (
                               <span className="text-xs bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-full">
                                 Compartilhada
+                              </span>
+                            )}
+                            {list.isShared && list.status === 'open' && (
+                              <span className="text-xs bg-yellow-100 text-yellow-600 px-1.5 py-0.5 rounded-full">
+                                Em edição
                               </span>
                             )}
                           </div>
@@ -496,12 +501,18 @@ export default function ShoppingMode({ session }) {
                           </button>
                         )}
                       </div>
-                      <button
-                        onClick={() => openStartModal(list)}
-                        className="mt-3 w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors"
-                      >
-                        <Play size={15} /> Iniciar Compra
-                      </button>
+                      {list.isShared && list.status === 'open' ? (
+                        <div className="mt-3 w-full flex items-center justify-center gap-2 bg-gray-100 text-gray-400 text-sm font-semibold py-2.5 rounded-xl cursor-not-allowed">
+                          <Play size={15} /> Lista sendo preparada...
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => openStartModal(list)}
+                          className="mt-3 w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors"
+                        >
+                          <Play size={15} /> Iniciar Compra
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}

@@ -663,7 +663,7 @@ export default function ShoppingList({ session }) {
               </button>
             </div>
             <p className="text-xs text-gray-400">
-              Após aceitar o convite, o convidado terá acesso à lista em "Fazer Compras".
+              Após aceitar o convite, o convidado verá a lista em "Fazer Compras". Se ainda estiver em edição, ela ficará visível como "Em edição" até ser finalizada.
             </p>
           </div>
         </div>
