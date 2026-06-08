@@ -64,18 +64,50 @@ export default function ShoppingMode({ session }) {
 
     setSavedLists([...(ownLists || []), ...sharedLists]);
 
-    // Active sessions
-    const { data: sessions } = await supabase
+    // Active sessions — próprias + de listas compartilhadas iniciadas por outra pessoa
+    const { data: ownSessions } = await supabase
       .from('shopping_sessions')
-      .select('id, list_id, market_id, created_at, markets(name), shopping_lists(name)')
+      .select('id, list_id, user_id, market_id, created_at, markets(name), shopping_lists(name)')
       .eq('user_id', userId).eq('status', 'active')
       .order('created_at', { ascending: false });
-    setActiveSessions(sessions || []);
+
+    let sharedActiveSessions = [];
+    if (memberListIds.length > 0) {
+      const { data: memberSessions } = await supabase
+        .from('shopping_sessions')
+        .select('id, list_id, user_id, market_id, created_at, markets(name), shopping_lists(name)')
+        .in('list_id', memberListIds).eq('status', 'active')
+        .neq('user_id', userId)
+        .order('created_at', { ascending: false });
+      sharedActiveSessions = memberSessions || [];
+    }
+    setActiveSessions([...(ownSessions || []), ...sharedActiveSessions]);
 
     setLoading(false);
   }, [userId]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Sincronização em tempo real durante a sessão de compra
+  useEffect(() => {
+    if (!activeSession) return;
+    const channel = supabase
+      .channel(`session-items-${activeSession.id}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'session_items',
+        filter: `session_id=eq.${activeSession.id}`,
+      }, (payload) => {
+        setSItems(prev => prev.map(si =>
+          si.id === payload.new.id
+            ? { ...si, picked: payload.new.picked, actualPrice: payload.new.actual_price }
+            : si
+        ));
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [activeSession?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadSessionItems = async (sessionId) => {
     const { data } = await supabase
@@ -103,6 +135,7 @@ export default function ShoppingMode({ session }) {
       list_name: sess.shopping_lists?.name || 'Lista',
       market_id: sess.market_id,
       market_name: sess.markets?.name || null,
+      session_owner_id: sess.user_id,
     });
     setSItems(items);
     setView('session');
@@ -118,6 +151,20 @@ export default function ShoppingMode({ session }) {
 
   const startSession = async () => {
     if (!startList) return;
+
+    // Se já existe uma sessão ativa para esta lista, entrar nela
+    const { data: existing } = await supabase
+      .from('shopping_sessions')
+      .select('id, list_id, user_id, market_id, markets(name), shopping_lists(name)')
+      .eq('list_id', startList.id).eq('status', 'active')
+      .maybeSingle();
+
+    if (existing) {
+      await resumeSession(existing);
+      setShowStartModal(false);
+      return;
+    }
+
     let marketId = sessionMarketId ? parseInt(sessionMarketId, 10) : startList.market_id || null;
 
     if (showNewMarketInput && newMarketName.trim()) {
@@ -132,7 +179,7 @@ export default function ShoppingMode({ session }) {
     const { data: sess } = await supabase
       .from('shopping_sessions')
       .insert({ list_id: startList.id, user_id: userId, market_id: marketId, status: 'active' })
-      .select('id, list_id, market_id, markets(name)')
+      .select('id, list_id, user_id, market_id, markets(name)')
       .single();
     if (!sess) return;
 
@@ -147,7 +194,7 @@ export default function ShoppingMode({ session }) {
 
     const items = await loadSessionItems(sess.id);
     const mktName = sess.markets?.name || markets.find(m => m.id === marketId)?.name || null;
-    setActiveSession({ id: sess.id, list_id: startList.id, list_name: startList.name, market_id: marketId, market_name: mktName });
+    setActiveSession({ id: sess.id, list_id: startList.id, list_name: startList.name, market_id: marketId, market_name: mktName, session_owner_id: sess.user_id });
     setSItems(items);
     setShowStartModal(false);
     setView('session');
@@ -175,9 +222,12 @@ export default function ShoppingMode({ session }) {
       status: 'completed', total, completed_at: new Date().toISOString(),
     }).eq('id', activeSession.id);
 
-    await supabase.from('shopping_lists').update({
-      status: 'closed', total, completed_at: new Date().toISOString(),
-    }).eq('id', activeSession.list_id);
+    // Apenas o criador da sessão pode fechar a lista
+    if (activeSession.session_owner_id === userId) {
+      await supabase.from('shopping_lists').update({
+        status: 'closed', total, completed_at: new Date().toISOString(),
+      }).eq('id', activeSession.list_id);
+    }
 
     if (activeSession.market_id && pickedItems.length > 0) {
       await supabase.from('price_history').upsert(
@@ -311,7 +361,7 @@ export default function ShoppingMode({ session }) {
                           R$ {(displayPrice * item.quantity).toFixed(2)}
                         </span>
                         {item.quantity !== 1 && (
-                          <span className="text-xs text-gray-400 block">R$ {displayPrice.toFixed(2)}/un</span>
+                          <span className="text-xs text-gray-400 block">R$ {displayPrice.toFixed(2)}/{item.unit}</span>
                         )}
                         {item.actualPrice !== null && item.actualPrice !== undefined && (
                           <span className="text-xs text-blue-400 block">editado</span>

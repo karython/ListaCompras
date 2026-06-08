@@ -53,19 +53,38 @@ export default function ShoppingList({ session }) {
     const { data: histData } = await supabase
       .from('price_history').select('item_name, market_id, price').eq('user_id', userId);
     const hist = {};
+    const knownItemsArr = [];
     (histData || []).forEach((row) => {
-      if (!hist[row.item_name]) hist[row.item_name] = {};
-      hist[row.item_name][row.market_id] = row.price;
+      const key = row.item_name.toLowerCase().trim();
+      if (!hist[key]) {
+        hist[key] = {};
+        knownItemsArr.push(row.item_name.trim());
+      }
+      hist[key][row.market_id] = row.price;
     });
     setPriceHistory(hist);
-    setKnownItems(Object.keys(hist));
+    setKnownItems(knownItemsArr);
 
     const { data: listsData } = await supabase
       .from('shopping_lists')
       .select('id, name, market_id, status, total, created_at, markets(id, name)')
       .eq('user_id', userId).eq('status', 'open')
       .order('created_at', { ascending: false });
-    setLists(listsData || []);
+
+    // Listas compartilhadas ainda em edição
+    const { data: memberships } = await supabase
+      .from('list_members').select('list_id').eq('user_id', userId);
+    const memberListIds = (memberships || []).map(m => m.list_id);
+    let sharedOpenLists = [];
+    if (memberListIds.length > 0) {
+      const { data: sharedData } = await supabase
+        .from('shopping_lists')
+        .select('id, name, user_id, market_id, status, total, created_at, markets(id, name)')
+        .in('id', memberListIds).eq('status', 'open')
+        .order('created_at', { ascending: false });
+      sharedOpenLists = (sharedData || []).map(l => ({ ...l, isShared: true }));
+    }
+    setLists([...(listsData || []), ...sharedOpenLists]);
 
     // For "copy from last": get most recent saved or closed list
     const { data: lastSaved } = await supabase
@@ -164,7 +183,7 @@ export default function ShoppingList({ session }) {
 
   const addItem = async () => {
     if (!itemName.trim() || !activeList) return;
-    const price = priceHistory[itemName.trim()]?.[activeList.market_id] ?? 0;
+    const price = priceHistory[itemName.trim().toLowerCase()]?.[activeList.market_id] ?? 0;
     const { data, error } = await supabase
       .from('list_items').insert({
         list_id: activeList.id, user_id: userId,
@@ -190,9 +209,10 @@ export default function ShoppingList({ session }) {
         { user_id: userId, item_name: item.name, market_id: activeList.market_id, price: floatPrice, updated_at: new Date().toISOString() },
         { onConflict: 'user_id,item_name,market_id' }
       );
+      const key = item.name.toLowerCase();
       setPriceHistory((prev) => ({
         ...prev,
-        [item.name]: { ...(prev[item.name] || {}), [activeList.market_id]: floatPrice },
+        [key]: { ...(prev[key] || {}), [activeList.market_id]: floatPrice },
       }));
     }
   };
@@ -219,7 +239,7 @@ export default function ShoppingList({ session }) {
 
   const switchMarket = async (market) => {
     const newItems = items.map((item) => ({
-      ...item, price: priceHistory[item.name]?.[market.id] ?? item.price,
+      ...item, price: priceHistory[item.name.toLowerCase()]?.[market.id] ?? item.price,
     }));
     await supabase.from('shopping_lists').update({ market_id: market.id }).eq('id', activeList.id);
     await Promise.all(newItems.map((item) =>
@@ -292,15 +312,24 @@ export default function ShoppingList({ session }) {
             >
               <ArrowLeft size={16} /> Listas
             </button>
-            <h2 className="font-semibold text-gray-800 text-sm truncate mx-2 max-w-[150px]">
-              {activeList.name}
-            </h2>
-            <button
-              onClick={saveList}
-              className="bg-blue-600 text-white text-xs px-3 py-1.5 rounded-lg font-semibold hover:bg-blue-700"
-            >
-              Salvar Lista
-            </button>
+            <div className="flex items-center gap-1.5 mx-2 min-w-0">
+              <h2 className="font-semibold text-gray-800 text-sm truncate max-w-[120px]">
+                {activeList.name}
+              </h2>
+              {activeList.isShared && (
+                <span className="text-xs bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                  Compartilhada
+                </span>
+              )}
+            </div>
+            {!activeList.isShared && (
+              <button
+                onClick={saveList}
+                className="bg-blue-600 text-white text-xs px-3 py-1.5 rounded-lg font-semibold hover:bg-blue-700 flex-shrink-0"
+              >
+                Salvar Lista
+              </button>
+            )}
           </div>
 
           <div className="flex items-center justify-between px-4 pb-2.5">
@@ -428,9 +457,9 @@ export default function ShoppingList({ session }) {
                   <datalist id="known-items-list">
                     {knownItems.map((name) => <option key={name} value={name} />)}
                   </datalist>
-                  {itemName && priceHistory[itemName]?.[activeList.market_id] !== undefined && (
+                  {itemName && priceHistory[itemName.trim().toLowerCase()]?.[activeList.market_id] !== undefined && (
                     <p className="text-xs text-blue-500 mt-1 px-1">
-                      Último preço neste mercado: R$ {priceHistory[itemName][activeList.market_id].toFixed(2)}
+                      Último preço neste mercado: R$ {priceHistory[itemName.trim().toLowerCase()][activeList.market_id].toFixed(2)}
                     </p>
                   )}
                 </div>
@@ -544,18 +573,29 @@ export default function ShoppingList({ session }) {
                 </div>
               </button>
               <div className="border-t border-gray-50 px-4 py-2 flex items-center justify-between">
-                <button
-                  onClick={() => openShareModal(list.id)}
-                  className="flex items-center gap-1 text-xs text-gray-400 hover:text-blue-500 transition-colors"
-                >
-                  <Share2 size={13} /> Compartilhar
-                </button>
-                <button
-                  onClick={() => deleteList(list.id)}
-                  className="text-xs text-red-400 hover:text-red-600"
-                >
-                  Excluir lista
-                </button>
+                <div className="flex items-center gap-2">
+                  {!list.isShared && (
+                    <button
+                      onClick={() => openShareModal(list.id)}
+                      className="flex items-center gap-1 text-xs text-gray-400 hover:text-blue-500 transition-colors"
+                    >
+                      <Share2 size={13} /> Compartilhar
+                    </button>
+                  )}
+                  {list.isShared && (
+                    <span className="text-xs bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-full">
+                      Compartilhada
+                    </span>
+                  )}
+                </div>
+                {!list.isShared && (
+                  <button
+                    onClick={() => deleteList(list.id)}
+                    className="text-xs text-red-400 hover:text-red-600"
+                  >
+                    Excluir lista
+                  </button>
+                )}
               </div>
             </div>
           ))}
