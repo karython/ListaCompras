@@ -15,15 +15,29 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false }
 });
 
+const CORS_HEADERS = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-methods': 'GET, POST, OPTIONS',
+  'access-control-allow-headers': 'Content-Type, Authorization, apikey, x-client-info, x-supabase-auth, x-supabase-realtime-info',
+};
+
+function withCors(headers: HeadersInit = {}) {
+  return { ...CORS_HEADERS, ...headers };
+}
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'content-type': 'application/json' },
+    headers: withCors({ 'content-type': 'application/json' }),
   });
 }
 
 function errorResponse(message: string, status = 400) {
   return jsonResponse({ error: message }, status);
+}
+
+function serverErrorResponse(message = 'Erro interno do servidor') {
+  return jsonResponse({ error: message }, 500);
 }
 
 async function fetchAsaas(path: string, options: RequestInit = {}) {
@@ -38,8 +52,19 @@ async function fetchAsaas(path: string, options: RequestInit = {}) {
     ...options,
     headers,
   });
-  const data = await response.json();
-  return { ok: response.ok, data };
+
+  const text = await response.text();
+  let data: any = null;
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch (error) {
+      console.error('Failed to parse Asaas response JSON:', error, 'responseText:', text);
+      data = { rawText: text };
+    }
+  }
+
+  return { ok: response.ok, status: response.status, data, text };
 }
 
 async function findOrCreateCustomer(email: string, name: string, userId: string) {
@@ -60,7 +85,8 @@ async function findOrCreateCustomer(email: string, name: string, userId: string)
   });
 
   if (!create.ok) {
-    throw new Error(create.data?.errors?.[0]?.description || 'Falha ao criar cliente Asaas');
+    const errorMessage = create.data?.errors?.[0]?.description || create.data?.message || create.text || 'Falha ao criar cliente Asaas';
+    throw new Error(errorMessage);
   }
   return create.data;
 }
@@ -92,7 +118,8 @@ async function createPayment(requestBody: any) {
   });
 
   if (!asaasResponse.ok) {
-    return errorResponse(asaasResponse.data?.errors?.[0]?.description || 'Erro ao criar cobrança Asaas', 502);
+    const errorMessage = asaasResponse.data?.errors?.[0]?.description || asaasResponse.data?.message || asaasResponse.text || 'Erro ao criar cobrança Asaas';
+    return errorResponse(errorMessage, 502);
   }
 
   const payment = asaasResponse.data;
@@ -241,21 +268,31 @@ async function webhook(request: Request, parsedBody?: any) {
 }
 
 serve(async (request: Request) => {
-  if (request.method !== 'POST') {
-    return errorResponse('Método não autorizado', 405);
+  try {
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers: CORS_HEADERS });
+    }
+
+    if (request.method !== 'POST') {
+      return errorResponse('Método não autorizado', 405);
+    }
+
+    const text = await request.text();
+    const body = text ? JSON.parse(text) : {};
+    const action = body.action;
+
+    if (action === 'create-payment') return await createPayment(body);
+    if (action === 'confirm-payment') return await confirmPayment(body);
+    if (action === 'webhook') return await webhook(request, body);
+
+    if (body?.id || body?.object || body?.data) {
+      return await webhook(request, body);
+    }
+
+    return errorResponse('Ação inválida', 400);
+  } catch (error) {
+    console.error('Unhandled error in edge function:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    return serverErrorResponse(message);
   }
-
-  const text = await request.text();
-  const body = text ? JSON.parse(text) : {};
-  const action = body.action;
-
-  if (action === 'create-payment') return await createPayment(body);
-  if (action === 'confirm-payment') return await confirmPayment(body);
-  if (action === 'webhook') return await webhook(request, body);
-
-  if (body?.id || body?.object || body?.data) {
-    return await webhook(request, body);
-  }
-
-  return errorResponse('Ação inválida', 400);
 });
