@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import Auth from './components/Auth';
 import ShoppingList from './components/ShoppingList';
 import ShoppingMode from './components/ShoppingMode';
 import History from './components/History';
 import Analytics from './components/Analytics';
+import SubscriptionPlanModal from './components/SubscriptionPlanModal';
+import { fetchSubscription, createAsaasPayment, confirmAsaasPayment } from './services/subscriptionService';
 import { ShoppingCart, ShoppingBag, Clock, BarChart2, LogOut } from 'lucide-react';
 
 const NAV_TABS = [
@@ -20,6 +22,18 @@ export default function App() {
   const [view, setView] = useState('list');
   const [firstName, setFirstName] = useState('');
   const [joinNotification, setJoinNotification] = useState('');
+  const [subscription, setSubscription] = useState(null);
+  const [subscriptionLoading, setSubscriptionLoading] = useState(false);
+  const [subscriptionModalOpen, setSubscriptionModalOpen] = useState(false);
+  const [subscriptionReason, setSubscriptionReason] = useState('');
+  const [billingType, setBillingType] = useState('CREDIT_CARD');
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [paymentLink, setPaymentLink] = useState('');
+  const [paymentCreated, setPaymentCreated] = useState(false);
+  const [paymentId, setPaymentId] = useState('');
+  const [paymentError, setPaymentError] = useState('');
+  const [confirmLoading, setConfirmLoading] = useState(false);
+  const [confirmMessage, setConfirmMessage] = useState('');
 
   // Capture share token from URL before anything else
   useEffect(() => {
@@ -49,6 +63,87 @@ export default function App() {
       .from('profiles').select('full_name').eq('id', session.user.id).maybeSingle()
       .then(({ data }) => { if (data?.full_name) setFirstName(data.full_name.split(' ')[0]); });
   }, [session]);
+
+  const loadSubscription = useCallback(async () => {
+    if (!session?.user) return;
+    setSubscriptionLoading(true);
+    try {
+      const data = await fetchSubscription(session.user.id);
+      setSubscription(data);
+    } catch (error) {
+      console.error('Erro ao carregar assinatura:', error);
+      setSubscription(null);
+    } finally {
+      setSubscriptionLoading(false);
+    }
+  }, [session]);
+
+  useEffect(() => {
+    loadSubscription();
+  }, [loadSubscription]);
+
+  const refreshSubscription = async () => {
+    await loadSubscription();
+  };
+
+  const openSubscriptionModal = (reason) => {
+    setSubscriptionReason(reason);
+    setSubscriptionModalOpen(true);
+    setPaymentError('');
+    setConfirmMessage('');
+    setPaymentCreated(false);
+    setPaymentLink('');
+    setPaymentId('');
+  };
+
+  const closeSubscriptionModal = () => {
+    setSubscriptionModalOpen(false);
+    setPaymentError('');
+    setConfirmMessage('');
+  };
+
+  const handleCreatePayment = async () => {
+    if (!session?.user) return;
+    setPaymentLoading(true);
+    setPaymentError('');
+    setConfirmMessage('');
+
+    try {
+      const result = await createAsaasPayment({
+        userId: session.user.id,
+        email: session.user.email,
+        name: firstName || session.user.email,
+        billingType,
+      });
+      const payment = result.payment;
+      setPaymentCreated(true);
+      setPaymentLink(payment.invoiceUrl || payment.bankSlipUrl || payment.pdfLink || '');
+      setPaymentId(payment.id);
+    } catch (error) {
+      setPaymentError(error?.message || 'Erro ao criar pagamento. Tente novamente.');
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
+
+  const handleConfirmPayment = async () => {
+    if (!session?.user || !paymentId) return;
+    setConfirmLoading(true);
+    setPaymentError('');
+    setConfirmMessage('');
+
+    try {
+      const result = await confirmAsaasPayment({ paymentId, userId: session.user.id });
+      setConfirmMessage(result.message || 'Status de pagamento atualizado.');
+      if (result.success) {
+        await refreshSubscription();
+      }
+    } catch (error) {
+      setPaymentError(error?.message || 'Erro ao confirmar o pagamento.');
+    } finally {
+      setConfirmLoading(false);
+    }
+  };
 
   // Process pending share token after login
   useEffect(() => {
@@ -136,11 +231,42 @@ export default function App() {
 
       {/* Scrollable content */}
       <main className="max-w-lg mx-auto pt-16 pb-20">
-        {view === 'list' && <ShoppingList key={session.user.id} session={session} />}
-        {view === 'shopping' && <ShoppingMode key={session.user.id} session={session} />}
+        {view === 'list' && (
+          <ShoppingList
+            key={session.user.id}
+            session={session}
+            subscription={subscription}
+            onRequireSubscription={() => openSubscriptionModal('create-list')}
+            refreshSubscription={refreshSubscription}
+          />
+        )}
+        {view === 'shopping' && (
+          <ShoppingMode
+            key={session.user.id}
+            session={session}
+            subscription={subscription}
+            onRequireSubscription={() => openSubscriptionModal('start-purchase')}
+            refreshSubscription={refreshSubscription}
+          />
+        )}
         {view === 'history' && <History key={session.user.id} session={session} />}
         {view === 'analytics' && <Analytics key={session.user.id} session={session} />}
       </main>
+
+      <SubscriptionPlanModal
+        open={subscriptionModalOpen}
+        onClose={closeSubscriptionModal}
+        onSelectBillingType={setBillingType}
+        billingType={billingType}
+        onPay={handleCreatePayment}
+        paymentLink={paymentLink}
+        paymentLoading={paymentLoading}
+        paymentError={paymentError}
+        paymentCreated={paymentCreated}
+        onConfirm={handleConfirmPayment}
+        confirmLoading={confirmLoading}
+        confirmMessage={confirmMessage}
+      />
 
       {/* Fixed bottom nav */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 shadow-lg">

@@ -8,7 +8,7 @@ import {
 
 const UNITS = ['un', 'kg', 'g', 'l', 'ml', 'cx', 'pc', 'dz'];
 
-export default function ShoppingList({ session }) {
+export default function ShoppingList({ session, subscription, onRequireSubscription, refreshSubscription }) {
   const userId = session.user.id;
 
   const [markets, setMarkets] = useState([]);
@@ -19,6 +19,7 @@ export default function ShoppingList({ session }) {
   const [items, setItems] = useState([]);
   const [prevListTotal, setPrevListTotal] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [listCount, setListCount] = useState(0);
 
   const [showNewList, setShowNewList] = useState(false);
   const [newListName, setNewListName] = useState('');
@@ -70,6 +71,12 @@ export default function ShoppingList({ session }) {
       .select('id, name, market_id, status, total, created_at, markets(id, name)')
       .eq('user_id', userId).eq('status', 'open')
       .order('created_at', { ascending: false });
+
+    const { count: totalLists } = await supabase
+      .from('shopping_lists')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId);
+    setListCount(totalLists || 0);
 
     // Listas compartilhadas ainda em edição
     const { data: memberships } = await supabase
@@ -132,6 +139,12 @@ export default function ShoppingList({ session }) {
   };
 
   const openNewListModal = () => {
+    const isFreeExpired = !(subscription?.plan === 'annual' && subscription?.status === 'active' && subscription?.expires_at && new Date(subscription.expires_at) > new Date());
+    if (isFreeExpired && listCount >= 3) {
+      onRequireSubscription();
+      return;
+    }
+
     const today = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
     setNewListName(`Compras ${today}`);
     setNewListMarketId(markets[0]?.id?.toString() || '');
@@ -149,14 +162,26 @@ export default function ShoppingList({ session }) {
       if (created) marketId = created.id;
     }
 
+    const isFreeExpired = !(subscription?.plan === 'annual' && subscription?.status === 'active' && subscription?.expires_at && new Date(subscription.expires_at) > new Date());
+    if (isFreeExpired && listCount >= 3) {
+      onRequireSubscription();
+      return;
+    }
+
     const { data: list, error } = await supabase
       .from('shopping_lists')
       .insert({ user_id: userId, name: newListName.trim(), market_id: marketId, status: 'open' })
       .select('id, name, market_id, status, total, created_at, markets(id, name)')
       .single();
-    if (error || !list) return;
+    if (error || !list) {
+      if (error?.message?.includes('permission')) {
+        onRequireSubscription();
+      }
+      return;
+    }
 
     setLists((prev) => [list, ...prev]);
+    setListCount((current) => current + 1);
     setShowNewList(false);
 
     let initialItems = [];

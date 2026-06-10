@@ -6,7 +6,7 @@ import {
   Play, AlertCircle, X,
 } from 'lucide-react';
 
-export default function ShoppingMode({ session }) {
+export default function ShoppingMode({ session, subscription, onRequireSubscription, refreshSubscription }) {
   const userId = session.user.id;
 
   const [view, setView] = useState('select'); // 'select' | 'session'
@@ -32,6 +32,8 @@ export default function ShoppingMode({ session }) {
   const [showShareModal, setShowShareModal] = useState(false);
   const [shareLink, setShareLink] = useState('');
   const [linkCopied, setLinkCopied] = useState(false);
+
+  const [purchaseCount, setPurchaseCount] = useState(0);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -83,6 +85,13 @@ export default function ShoppingMode({ session }) {
     }
     setActiveSessions([...(ownSessions || []), ...sharedActiveSessions]);
 
+    const { count: totalPurchases } = await supabase
+      .from('shopping_sessions')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('status', 'completed');
+
+    setPurchaseCount(totalPurchases || 0);
     setLoading(false);
   }, [userId]);
 
@@ -142,6 +151,12 @@ export default function ShoppingMode({ session }) {
   };
 
   const openStartModal = (list) => {
+    const isFreeExpired = !(subscription?.plan === 'annual' && subscription?.status === 'active' && subscription?.expires_at && new Date(subscription.expires_at) > new Date());
+    if (isFreeExpired && purchaseCount >= 3) {
+      onRequireSubscription();
+      return;
+    }
+
     setStartList(list);
     setSessionMarketId(list.market_id?.toString() || '');
     setShowNewMarketInput(false);
@@ -151,6 +166,12 @@ export default function ShoppingMode({ session }) {
 
   const startSession = async () => {
     if (!startList) return;
+
+    const isFreeExpired = !(subscription?.plan === 'annual' && subscription?.status === 'active' && subscription?.expires_at && new Date(subscription.expires_at) > new Date());
+    if (isFreeExpired && purchaseCount >= 3) {
+      onRequireSubscription();
+      return;
+    }
 
     // Se já existe uma sessão ativa para esta lista, entrar nela
     const { data: existing } = await supabase
@@ -245,6 +266,7 @@ export default function ShoppingMode({ session }) {
     setActiveSession(null); setSItems([]);
     setShowConfirmFinalize(false); setView('select');
     await loadData();
+    if (refreshSubscription) await refreshSubscription();
   };
 
   const getShareLink = async (listId) => {
