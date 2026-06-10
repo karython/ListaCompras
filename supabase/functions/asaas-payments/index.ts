@@ -41,15 +41,26 @@ function serverErrorResponse(message = 'Erro interno do servidor') {
 }
 
 async function fetchAsaas(path: string, options: RequestInit = {}) {
+  // Try different header formats for Asaas authentication
   const headers = {
     'Content-Type': 'application/json',
-    Accept: 'application/json',
-    Authorization: `Bearer ${ASAAS_API_KEY}`,
+    'Accept': 'application/json',
+    'Authorization': ASAAS_API_KEY, // Try without Bearer prefix
     ...options.headers,
   };
 
+  const keyPreview = ASAAS_API_KEY.length > 0 
+    ? `${ASAAS_API_KEY.substring(0, 5)}...${ASAAS_API_KEY.substring(ASAAS_API_KEY.length - 5)}` 
+    : 'EMPTY';
+  
   console.log(`[fetchAsaas] Calling ${ASAAS_BASE_URL}${path} with method ${options.method || 'GET'}`);
-  console.log(`[fetchAsaas] API Key present: ${!!ASAAS_API_KEY}`);
+  console.log(`[fetchAsaas] API Key: ${keyPreview} (length: ${ASAAS_API_KEY.length})`);
+  console.log(`[fetchAsaas] Using header format: Authorization (direct, no Bearer)`);
+  console.log(`[fetchAsaas] Headers:`, JSON.stringify({ 
+    'Content-Type': headers['Content-Type'],
+    'Accept': headers['Accept'],
+    'Authorization': `${keyPreview}` 
+  }));
 
   const response = await fetch(`${ASAAS_BASE_URL}${path}`, {
     ...options,
@@ -58,13 +69,14 @@ async function fetchAsaas(path: string, options: RequestInit = {}) {
 
   const text = await response.text();
   console.log(`[fetchAsaas] Response status: ${response.status}, body length: ${text.length}`);
+  console.log(`[fetchAsaas] Response headers content-type: ${response.headers.get('content-type')}`);
   
   let data: any = null;
   if (text) {
     try {
       data = JSON.parse(text);
     } catch (error) {
-      console.error('Failed to parse Asaas response JSON:', error, 'responseText:', text);
+      console.error('Failed to parse Asaas response JSON:', error, 'responseText:', text.substring(0, 200));
       data = { rawText: text };
     }
   }
@@ -318,6 +330,11 @@ serve(async (request: Request) => {
       console.error('Missing environment variables:', missingVars);
       return serverErrorResponse(`Missing environment variables: ${missingVars}`);
     }
+
+    const keyPreview = ASAAS_API_KEY.length > 0 
+      ? `${ASAAS_API_KEY.substring(0, 5)}...${ASAAS_API_KEY.substring(ASAAS_API_KEY.length - 5)}` 
+      : 'EMPTY';
+    console.log(`[serve] Request received with API Key: ${keyPreview} (length: ${ASAAS_API_KEY.length})`);
 
     const text = await request.text();
     if (!text) {
