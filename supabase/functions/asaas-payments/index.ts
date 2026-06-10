@@ -48,12 +48,17 @@ async function fetchAsaas(path: string, options: RequestInit = {}) {
     ...options.headers,
   };
 
+  console.log(`[fetchAsaas] Calling ${ASAAS_BASE_URL}${path} with method ${options.method || 'GET'}`);
+  console.log(`[fetchAsaas] API Key present: ${!!ASAAS_API_KEY}`);
+
   const response = await fetch(`${ASAAS_BASE_URL}${path}`, {
     ...options,
     headers,
   });
 
   const text = await response.text();
+  console.log(`[fetchAsaas] Response status: ${response.status}, body length: ${text.length}`);
+  
   let data: any = null;
   if (text) {
     try {
@@ -64,40 +69,66 @@ async function fetchAsaas(path: string, options: RequestInit = {}) {
     }
   }
 
+  console.log(`[fetchAsaas] Response data:`, JSON.stringify(data).slice(0, 500));
   return { ok: response.ok, status: response.status, data, text };
 }
 
 async function findOrCreateCustomer(email: string, name: string, userId: string) {
   const query = `?email=${encodeURIComponent(email)}`;
+  console.log(`[findOrCreateCustomer] Searching for customer with email: ${email}`);
+  
   const search = await fetchAsaas(`/customers${query}`);
+  console.log(`[findOrCreateCustomer] Search result - ok: ${search.ok}, data:`, search.data?.data ? `Found ${search.data.data.length} customers` : 'No data');
+  
   if (search.ok && Array.isArray(search.data?.data) && search.data.data.length > 0) {
+    console.log(`[findOrCreateCustomer] Customer found, ID: ${search.data.data[0].id}`);
     return search.data.data[0];
   }
 
+  console.log(`[findOrCreateCustomer] Customer not found, creating new one...`);
   const payload = {
     name,
     email,
     externalReference: userId,
   };
+  
   const create = await fetchAsaas('/customers', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
 
+  console.log(`[findOrCreateCustomer] Create result - ok: ${create.ok}, status: ${create.status}`);
+  console.log(`[findOrCreateCustomer] Create response:`, JSON.stringify(create.data).slice(0, 500));
+
   if (!create.ok) {
     const errorMessage = create.data?.errors?.[0]?.description || create.data?.message || create.text || 'Falha ao criar cliente Asaas';
+    console.error(`[findOrCreateCustomer] Failed to create customer: ${errorMessage}`);
     throw new Error(errorMessage);
   }
+  
+  console.log(`[findOrCreateCustomer] Customer created successfully, ID: ${create.data.id}`);
   return create.data;
 }
 
 async function createPayment(requestBody: any) {
   const { userId, email, name, billingType } = requestBody;
   if (!userId || !email || !name || !billingType) {
+    console.error('Missing required fields:', { userId: !!userId, email: !!email, name: !!name, billingType: !!billingType });
     return errorResponse('Parâmetros inválidos para criar pagamento', 400);
   }
 
-  const customer = await findOrCreateCustomer(email, name, userId);
+  let customer;
+  try {
+    customer = await findOrCreateCustomer(email, name, userId);
+    if (!customer || !customer.id) {
+      console.error('Failed to get customer data:', customer);
+      return errorResponse('Falha ao obter dados do cliente Asaas', 502);
+    }
+  } catch (customerError) {
+    console.error('Error in findOrCreateCustomer:', customerError);
+    const errorMsg = customerError instanceof Error ? customerError.message : String(customerError);
+    return errorResponse(`Erro ao processar cliente: ${errorMsg}`, 502);
+  }
   const dueDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const payload: any = {
     customer: customer.id,
@@ -136,6 +167,7 @@ async function createPayment(requestBody: any) {
 
   if (error) {
     console.error('Erro ao salvar pagamento no Supabase:', error);
+    return errorResponse(`Erro ao salvar pagamento: ${error.message}`, 502);
   }
 
   return jsonResponse({ payment });
@@ -278,11 +310,29 @@ serve(async (request: Request) => {
     }
 
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !ASAAS_API_KEY) {
-      return serverErrorResponse('Missing required environment variables for Asaas payment function.');
+      const missingVars = [
+        !SUPABASE_URL ? 'SUPABASE_URL' : null,
+        !SUPABASE_SERVICE_ROLE_KEY ? 'SUPABASE_SERVICE_ROLE_KEY' : null,
+        !ASAAS_API_KEY ? 'ASAAS_API_KEY' : null,
+      ].filter(Boolean).join(', ');
+      console.error('Missing environment variables:', missingVars);
+      return serverErrorResponse(`Missing environment variables: ${missingVars}`);
     }
 
     const text = await request.text();
-    const body = text ? JSON.parse(text) : {};
+    if (!text) {
+      console.error('Empty request body');
+      return errorResponse('Request body não pode estar vazio', 400);
+    }
+
+    let body;
+    try {
+      body = JSON.parse(text);
+    } catch (parseError) {
+      console.error('JSON parse error:', parseError, 'text:', text);
+      return errorResponse('Invalid JSON no request body', 400);
+    }
+
     const action = body.action;
 
     if (action === 'create-payment') return await createPayment(body);
