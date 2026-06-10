@@ -110,29 +110,36 @@ export default function Auth() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {mode === 'register' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Nome completo</label>
-                <input
-                  type="text"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Seu nome completo"
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
-                  autoComplete="name"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">CPF (opcional)</label>
-                <input
-                  type="text"
-                  value={cpf}
-                  onChange={(e) => setCpf(e.target.value)}
-                  placeholder="000.000.000-00"
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
-                  autoComplete="off"
-                />
-              </div>
-            )}
+  <>
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1.5">
+        Nome completo
+      </label>
+      <input
+        type="text"
+        value={fullName}
+        onChange={(e) => setFullName(e.target.value)}
+        placeholder="Seu nome completo"
+        className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+        autoComplete="name"
+      />
+    </div>
+
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1.5">
+        CPF (opcional)
+      </label>
+      <input
+        type="text"
+        value={cpf}
+        onChange={(e) => setCpf(e.target.value)}
+        placeholder="000.000.000-00"
+        className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+        autoComplete="off"
+      />
+    </div>
+  </>
+)}
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
