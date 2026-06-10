@@ -23,9 +23,9 @@ export default function App() {
   const [firstName, setFirstName] = useState('');
   const [joinNotification, setJoinNotification] = useState('');
   const [subscription, setSubscription] = useState(null);
-
+  const [, setSubscriptionLoading] = useState(false);
   const [subscriptionModalOpen, setSubscriptionModalOpen] = useState(false);
-  
+  const [, setSubscriptionReason] = useState('');
   const [billingType, setBillingType] = useState('CREDIT_CARD');
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [paymentLink, setPaymentLink] = useState('');
