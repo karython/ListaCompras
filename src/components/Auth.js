@@ -19,6 +19,7 @@ function translateError(msg) {
 export default function Auth() {
   const [mode, setMode] = useState('login');
   const [fullName, setFullName] = useState('');
+  const [cpf, setCpf] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -44,10 +45,12 @@ export default function Auth() {
         setLoading(false);
         return;
       }
+        // CPF is optional on registration but recommended for payments
+        const cpfValue = cpf?.trim() || '';
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
-        options: { data: { full_name: fullName.trim() } },
+        options: { data: { full_name: fullName.trim(), cpf: cpfValue } },
       });
       if (error) {
         setError(translateError(error.message));
@@ -116,6 +119,17 @@ export default function Auth() {
                   placeholder="Seu nome completo"
                   className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
                   autoComplete="name"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">CPF (opcional)</label>
+                <input
+                  type="text"
+                  value={cpf}
+                  onChange={(e) => setCpf(e.target.value)}
+                  placeholder="000.000.000-00"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                  autoComplete="off"
                 />
               </div>
             )}

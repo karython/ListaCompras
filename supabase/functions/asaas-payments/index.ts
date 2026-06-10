@@ -45,7 +45,7 @@ async function fetchAsaas(path: string, options: RequestInit = {}) {
   const headers = {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
-    'Authorization': ASAAS_API_KEY, // Try without Bearer prefix
+    'access_token': ASAAS_API_KEY, // Asaas expects `access_token` header
     ...options.headers,
   };
 
@@ -55,11 +55,11 @@ async function fetchAsaas(path: string, options: RequestInit = {}) {
   
   console.log(`[fetchAsaas] Calling ${ASAAS_BASE_URL}${path} with method ${options.method || 'GET'}`);
   console.log(`[fetchAsaas] API Key: ${keyPreview} (length: ${ASAAS_API_KEY.length})`);
-  console.log(`[fetchAsaas] Using header format: Authorization (direct, no Bearer)`);
+  console.log(`[fetchAsaas] Using header format: access_token`);
   console.log(`[fetchAsaas] Headers:`, JSON.stringify({ 
     'Content-Type': headers['Content-Type'],
     'Accept': headers['Accept'],
-    'Authorization': `${keyPreview}` 
+    'access_token': `${keyPreview}` 
   }));
 
   const response = await fetch(`${ASAAS_BASE_URL}${path}`, {
@@ -85,7 +85,7 @@ async function fetchAsaas(path: string, options: RequestInit = {}) {
   return { ok: response.ok, status: response.status, data, text };
 }
 
-async function findOrCreateCustomer(email: string, name: string, userId: string) {
+async function findOrCreateCustomer(email: string, name: string, userId: string, cpfCnpj?: string) {
   const query = `?email=${encodeURIComponent(email)}`;
   console.log(`[findOrCreateCustomer] Searching for customer with email: ${email}`);
   
@@ -98,11 +98,12 @@ async function findOrCreateCustomer(email: string, name: string, userId: string)
   }
 
   console.log(`[findOrCreateCustomer] Customer not found, creating new one...`);
-  const payload = {
+  const payload: any = {
     name,
     email,
     externalReference: userId,
   };
+  if (cpfCnpj) payload.cpfCnpj = cpfCnpj;
   
   const create = await fetchAsaas('/customers', {
     method: 'POST',
@@ -124,6 +125,7 @@ async function findOrCreateCustomer(email: string, name: string, userId: string)
 
 async function createPayment(requestBody: any) {
   const { userId, email, name, billingType } = requestBody;
+  const cpfCnpj = requestBody.cpfCnpj || requestBody.cpf || requestBody.cnpj || null;
   if (!userId || !email || !name || !billingType) {
     console.error('Missing required fields:', { userId: !!userId, email: !!email, name: !!name, billingType: !!billingType });
     return errorResponse('Parâmetros inválidos para criar pagamento', 400);
@@ -131,7 +133,7 @@ async function createPayment(requestBody: any) {
 
   let customer;
   try {
-    customer = await findOrCreateCustomer(email, name, userId);
+    customer = await findOrCreateCustomer(email, name, userId, cpfCnpj || undefined);
     if (!customer || !customer.id) {
       console.error('Failed to get customer data:', customer);
       return errorResponse('Falha ao obter dados do cliente Asaas', 502);
@@ -151,6 +153,12 @@ async function createPayment(requestBody: any) {
     externalReference: userId,
     currency: 'BRL',
   };
+
+  // Asaas requires CPF/CNPJ on customer for creating some charges
+  if (!customer.cpfCnpj && !cpfCnpj) {
+    console.error('Asaas requires CPF/CNPJ for this customer before creating a payment');
+    return errorResponse('É necessário informar o CPF ou CNPJ do cliente para criar a cobrança. Envie `cpfCnpj` no corpo da requisição.', 400);
+  }
   if (billingType === 'PIX') {
     payload.pixExpirationDate = dueDate;
   }

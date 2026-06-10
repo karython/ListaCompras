@@ -21,6 +21,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState('list');
   const [firstName, setFirstName] = useState('');
+  const [cpf, setCpf] = useState('');
   const [joinNotification, setJoinNotification] = useState('');
   const [subscription, setSubscription] = useState(null);
   const [, setSubscriptionLoading] = useState(false);
@@ -60,8 +61,11 @@ export default function App() {
   useEffect(() => {
     if (!session?.user) { setFirstName(''); return; }
     supabase
-      .from('profiles').select('full_name').eq('id', session.user.id).maybeSingle()
-      .then(({ data }) => { if (data?.full_name) setFirstName(data.full_name.split(' ')[0]); });
+      .from('profiles').select('full_name, cpf').eq('id', session.user.id).maybeSingle()
+      .then(({ data }) => {
+        if (data?.full_name) setFirstName(data.full_name.split(' ')[0]);
+        if (data?.cpf) setCpf(data.cpf);
+      });
   }, [session]);
 
   const loadSubscription = useCallback(async () => {
@@ -113,6 +117,7 @@ export default function App() {
         userId: session.user.id,
         email: session.user.email,
         name: firstName || session.user.email,
+        cpf: cpf || undefined,
         billingType,
       });
       const payment = result.payment;

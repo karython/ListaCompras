@@ -11,13 +11,14 @@ export async function fetchSubscription(userId) {
   return data || null;
 }
 
-export async function createAsaasPayment({ userId, email, name, billingType }) {
+export async function createAsaasPayment({ userId, email, name, billingType, cpf }) {
   const payload = {
     action: 'create-payment',
     userId,
     email,
     name,
     billingType,
+    cpfCnpj: cpf || undefined,
   };
 
   const { data, error } = await supabase.functions.invoke('asaas-payments', {
