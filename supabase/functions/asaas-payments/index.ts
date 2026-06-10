@@ -277,6 +277,10 @@ serve(async (request: Request) => {
       return errorResponse('Método não autorizado', 405);
     }
 
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !ASAAS_API_KEY) {
+      return serverErrorResponse('Missing required environment variables for Asaas payment function.');
+    }
+
     const text = await request.text();
     const body = text ? JSON.parse(text) : {};
     const action = body.action;

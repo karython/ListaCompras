@@ -22,6 +22,7 @@ export async function createAsaasPayment({ userId, email, name, billingType }) {
 
   const { data, error } = await supabase.functions.invoke('asaas-payments', {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
 
@@ -38,6 +39,7 @@ export async function confirmAsaasPayment({ paymentId, userId }) {
 
   const { data, error } = await supabase.functions.invoke('asaas-payments', {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
 
